@@ -194,7 +194,7 @@ Or if the startup is growing perhaps the manager needs to check the vacation pol
 
 Cool stuff!
 
-## CL Examples
+### CL Examples
 
 I have incorporated two samples that I found in CL documentation. The first is from the [C2 Wiki](https://wiki.c2.com/?CommonLispConditionSystem) showing how restarts can be defined at multiple levels and managed from up the stack. The second comes from [a paper on the CL condition system](http://www.nhplace.com/kent/Papers/Exceptional-Situations-1990.html) involving a robot butler. You can [find them here](https://github.com/pangloss/pure-conditioning/blob/master/test/cl_example.clj).
 
