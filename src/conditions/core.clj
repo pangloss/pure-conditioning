@@ -215,6 +215,94 @@
   [data & pairs]
   (restarts* *handlers* data pairs))
 
+(defrecord Retry [args])
+
+(defn- inform-special-handlers [ident condition-handlers]
+  (vec
+   (interleave (take-nth 2 condition-handlers)
+               (walk/postwalk (fn [f]
+                                (if-let [sh (when (list? f)
+                                              ({'result! `-result! 'retry! `-retry!} (first f)))]
+                                  `(~sh '~ident ~@(rest f))
+                                  f))
+                              (take-nth 2 (rest condition-handlers))))))
+
+(defmacro retryable-fn*
+  "Returns a function of `args` that can support the `retry!` and `result!` functions in its condition handlers.
+
+  Arguments:
+
+  - `ident` should usually be nil, but may be a unique identifier to be uesd in
+    the ex-data of the exception used to unwind the stack upon retry or result.
+    The ex-data is one of:
+
+       {ident :retry :args [arg1 arg2]}
+       {ident :result :result result}
+
+  - `handlers` The parent handlers, usually *handlers*
+  - `handler-binding` a symbol that will be the new handlers within the block.
+  - `args` the function args and also the args that must be provided when calling `retry!`
+  - `condition-handlers` the handlers used in the manage block within this function'
+  - `forms` the body within the manage block. "
+  {:style/indent 4 :see-also ["retryable" "manage*" "manage"]}
+  [ident handlers [handler-binding & args] condition-handlers & forms]
+  (let [ident (or ident (gensym))
+        condition-handlers (inform-special-handlers ident condition-handlers)]
+    `(fn [~@args]
+       (let [result#
+             (manage* ~handlers [~handler-binding] ~condition-handlers
+                      (try
+                        ~@forms
+                        (catch clojure.lang.ExceptionInfo e#
+                          (let [data# (ex-data e#)]
+                            (case ('~ident data#)
+                              :retry (Retry. (:args data#))
+                              :result (:result data#)
+                              (throw e#))))))]
+         (if (instance? Retry result#)
+           (let [args# (.args result#)]
+             (recur (nth args# 0)))
+           result#)))))
+
+(defmacro retryable
+  "A kind of `manage` block that can support the `retry!` and `result!` functions in its condition handlers.
+
+  Arguments:
+
+  - `condition-handlers` the handlers used in the manage block within this function'
+  - `args` the function args and also the args that must be provided when calling `retry!`
+  - `forms` the body within the manage block. "
+  {:style/indent 2 :see-also ["retryable-fn*" "manage"]}
+  [[& args] condition-handlers & forms]
+  `((retryable-fn* nil *handlers* [handlers# ~@args] ~condition-handlers
+                   (binding [*handlers* handlers#]
+                     ~@forms))
+    ~@args))
+
+(defn result! [result]
+  (throw (ex-info "result! must be used within manage, retryable or retryable-fn* blocks." {::special-handler :result :result result})))
+
+(defn retry! [& args]
+  (throw (ex-info "retry! must be used within retryable or retryable-fn* blocks." {::special-handler :retry :args args})))
+
+(defn -result! [ident result]
+  (throw (ex-info "-result! must be used within manage, retryable or retryable-fn* blocks." {ident :result ::special-handler :result :result result})))
+
+(defn -retry! [ident & args]
+  (throw (ex-info "-retry! must be used within retryable or retryable-fn* blocks." {ident :retry ::special-handler :retry :args args})))
+
+(defn- result? [condition-handlers]
+  (->> (rest condition-handlers)
+       (take-nth 2)
+       (tree-seq (fn [x] ((some-fn seq? list?) x)) seq)
+       (some (fn [f] (and (list? f) (= 'result! (first f)))))))
+
+(defn- retry? [condition-handlers]
+  (->> (rest condition-handlers)
+       (take-nth 2)
+       (tree-seq (fn [x] ((some-fn seq? list?) x)) seq)
+       (some (fn [f] (and (list? f) (= 'retry! (first f)))))))
+
 (defmacro manage*
   "This is the explicit version of `manage` that does not use or modify the global *handlers* var.
 
@@ -224,7 +312,8 @@
 
       (manage* some-handlers [:file-not-found alternate-filename] [new-handlers]
         (open-file new-handlers my-file)"
-  [handlers condition-handlers [handler-binding] & forms]
+  {:see-also ["manage" "retryable-fn*"]}
+  [handlers [handler-binding] condition-handlers & forms]
   (assert (vector? condition-handlers))
   (when-not (even? (count condition-handlers))
     (throw (ex-info "manage condition-handlers must contain an even number of forms")))
@@ -253,11 +342,17 @@
   present in the global scope when the lazy sequence is realized and it can be
   confusing because it seems like the condition is defined but it just won't do
   anything!"
-  {:style/indent :defn}
+  {:style/indent :defn :see-also ["retryable"]}
   [condition-handlers & forms]
-  `(manage* *handlers* ~condition-handlers [handlers#]
-            (binding [*handlers* handlers#]
-              ~@forms)))
+  (cond
+    (retry? condition-handlers)
+    (throw (ex-info "retry! must be used within retryable or retryable-fn* blocks." {:handlers condition-handlers}))
+    (result? condition-handlers)
+    `(retryable ~condition-handlers [] ~@forms)
+    :else
+    `(manage* *handlers* [handlers#] ~condition-handlers
+              (binding [*handlers* handlers#]
+                ~@forms))))
 
 (defmacro with-handlers
   "Capture the global handlers into a local var. Use the handlers together with

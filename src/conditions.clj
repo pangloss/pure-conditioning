@@ -5,6 +5,7 @@
 
 (import-vars
  (conditions.core condition* condition restarts** restarts* restarts restart restart-cond restart-with handler handler-cond
+                  retry! result! retryable retryable-fn*
                   manage* manage lazy-conditions with-handlers global-handler!)
  (conditions.handlers custom error error* exception trace trace-value optional required
                       default handle remap fall-through sibling))

@@ -1,6 +1,7 @@
 (ns core-test
   (:require  [clojure.test :as t]
              [conditions :refer [manage condition lazy-conditions handler-cond restart-cond restart restarts
+                                 retryable retryable-fn* retry! result! condition*
                                  remap required sibling fall-through error exception default handle trace]]))
 
 (t/deftest various-handler-types
@@ -85,3 +86,47 @@
                          (condition :cond/x (dissoc arg :a :b :c) (default "Darn this is wrong"))))
           (t/is (= :golden
                    (condition :cond/x (dissoc arg :a :b :c :d) (default :golden)))))))))
+
+(t/deftest with-retryable-fn
+  (def rf (retryable-fn* nil [{}] [h x]
+              [:x #(retry! (inc %))]
+            (if (= 41 x)
+              (condition* h :x x)
+              (str x))))
+  (t/is (= "42" (rf 41))))
+
+
+(defn do-something [x]
+  (if (== 0 x)
+    (str "never see this " (condition :x x))
+    (/ 1 x)))
+
+(t/deftest with-retry
+  (t/is (= "-> 1/10"
+           (let [x 0]
+             (str "-> "
+                  (retryable [x]
+                      [:x #(retry! (+ 10 %))]
+                    (do-something x))))))
+
+  (t/is (= "-> 1/5"
+           (let [x 5]
+             (str "-> "
+                  (retryable [x]
+                      [:x #(retry! (+ 10 %))]
+                    (do-something x)))))))
+
+
+(t/deftest with-result
+  (t/is (= "-> nevermind"
+           (let [x 0]
+             (str "-> "
+                  (retryable [x]
+                      [:x (fn [_] (result! "nevermind"))]
+                    (do-something x))))))
+  (t/is (= "-> 1/3"
+           (let [x 3]
+             (str "-> "
+                  (retryable [x]
+                      [:x (fn [_] (result! "nevermind"))]
+                    (do-something x)))))))
