@@ -197,3 +197,34 @@ Cool stuff!
 ## CL Examples
 
 I have incorporated two samples that I found in CL documentation. The first is from the [C2 Wiki](https://wiki.c2.com/?CommonLispConditionSystem) showing how restarts can be defined at multiple levels and managed from up the stack. The second comes from [a paper on the CL condition system](http://www.nhplace.com/kent/Papers/Exceptional-Situations-1990.html) involving a robot butler. You can [find them here](https://github.com/pangloss/pure-conditioning/blob/master/test/cl_example.clj).
+
+## Unwind the stack with retry! and result!
+
+The final missing piece is the ability to respond to an error by unwinding the stack in the same way as we are used to with try/catch blocks. We can now do that with `result!`. Even better, we can also respond by retrying from the current stack frame with `retry!`.
+
+
+In this example, if `do-something` raises the condition `:x`, the result will be `"nevermind"` regardless of the logic nested within the do-something function, exactly as if that string were returned by a `catch` block.
+
+```clojure
+(manage [:x (fn [_] (result! "nevermind"))]
+  (do-something 3))
+```
+
+much like:
+
+```clojure
+(try
+  (do-something 3)
+  (catch Exception e
+    "nevermind"))
+```
+
+On the other hand, `retry!` requires a specialized manage block called `retryable` which functions exactly like `manage` but adds the ability to handle using `retry!`. This is only necessary because when retrying you need to say which variable is changed, so retryable adds a binding form before the handlers. Below it is `[x]`, but it can be any arity. The value(s) passed to `(retry! value)` will be bound to the variables listed in that block and then the block will be rerun.
+
+```clojure
+(retryable [x]
+    [:x #(retry! (+ 10 %))]
+  (do-something x)))))))
+```
+
+These stack-unwinding operations are fully compatible with all of the other handlers and also work with any arbitrary nesting, as the retry and result operations are explicitly tied to the block that they are defined in.

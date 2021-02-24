@@ -247,6 +247,7 @@
   {:style/indent 4 :see-also ["retryable" "manage*" "manage"]}
   [ident handlers [handler-binding & args] condition-handlers & forms]
   (let [ident (or ident (gensym))
+        result-args (gensym "args")
         condition-handlers (inform-special-handlers ident condition-handlers)]
     `(fn [~@args]
        (let [result#
@@ -260,8 +261,8 @@
                               :result (:result data#)
                               (throw e#))))))]
          (if (instance? Retry result#)
-           (let [args# (.args result#)]
-             (recur (nth args# 0)))
+           (let [~result-args (.args result#)]
+             (recur ~@(map-indexed (fn [i _] `(nth ~result-args ~i)) args)))
            result#)))))
 
 (defmacro retryable
@@ -310,7 +311,7 @@
   that the some-handlers value is unchanged and still useable without the
   inclusion of the handler added in this call:
 
-      (manage* some-handlers [:file-not-found alternate-filename] [new-handlers]
+      (manage* some-handlers [new-handlers] [:file-not-found alternate-filename]
         (open-file new-handlers my-file)"
   {:see-also ["manage" "retryable-fn*"]}
   [handlers [handler-binding] condition-handlers & forms]
@@ -348,7 +349,7 @@
     (retry? condition-handlers)
     (throw (ex-info "retry! must be used within retryable or retryable-fn* blocks." {:handlers condition-handlers}))
     (result? condition-handlers)
-    `(retryable ~condition-handlers [] ~@forms)
+    `(retryable [] ~condition-handlers ~@forms)
     :else
     `(manage* *handlers* [handlers#] ~condition-handlers
               (binding [*handlers* handlers#]

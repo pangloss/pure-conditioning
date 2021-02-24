@@ -119,14 +119,13 @@
 
 (t/deftest with-result
   (t/is (= "-> nevermind"
-           (let [x 0]
-             (str "-> "
-                  (retryable [x]
-                      [:x (fn [_] (result! "nevermind"))]
-                    (do-something x))))))
+           (str "-> "
+                (manage
+                  [:x (fn [_] (result! "nevermind"))]
+                  (do-something 0)))))
   (t/is (= "-> 1/3"
-           (let [x 3]
-             (str "-> "
-                  (retryable [x]
-                      [:x (fn [_] (result! "nevermind"))]
-                    (do-something x)))))))
+           (str "-> "
+                (manage
+                  [:x (fn [_] (result! "nevermind"))]
+                  (do-something 3))))))
+
