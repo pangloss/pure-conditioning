@@ -7,7 +7,8 @@
     - [Conditions in Clojure](#conditions-in-clojure)
         - [Provided Handlers](#provided-handlers)
     - [Restarts](#restarts)
-    - [CL Examples](#cl-examples)
+        - [CL Examples](#cl-examples)
+    - [Unwind the Stack](#unwind-the-stack-with-retry-and-result)
 
 <!-- markdown-toc end -->
 
@@ -198,7 +199,7 @@ Cool stuff!
 
 I have incorporated two samples that I found in CL documentation. The first is from the [C2 Wiki](https://wiki.c2.com/?CommonLispConditionSystem) showing how restarts can be defined at multiple levels and managed from up the stack. The second comes from [a paper on the CL condition system](http://www.nhplace.com/kent/Papers/Exceptional-Situations-1990.html) involving a robot butler. You can [find them here](https://github.com/pangloss/pure-conditioning/blob/master/test/cl_example.clj).
 
-## Unwind the stack with retry! and result!
+## Unwind the Stack With Retry! and Result!
 
 The final missing piece is the ability to respond to an error by unwinding the stack in the same way as we are used to with try/catch blocks. We can now do that with `result!`. Even better, we can also respond by retrying from the current stack frame with `retry!`.
 
