@@ -16,6 +16,8 @@
 
 [Pure Conditioning](https://github.com/pangloss/pure-conditioning) is a purely functional, fast, and cleanly decomplected condition / restart system in Clojure. It does not use exceptions and needs no global state at all.
 
+This project is still in the alpha stage and may introduce breaking changes. Once it gets through the first round of feedback and bug fixes I will bump it to 1.0.0 and try to keep it stable after that point.
+
 While global state is not required, it makes things more convenient so stateful variants of all pure functions that make use of a dynamicly bound var are available.
 
 ## Background
