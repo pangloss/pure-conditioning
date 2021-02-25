@@ -1,0 +1,307 @@
+* A Tutorial on Conditions and Restarts in Clojure
+
+This tutorial is adapted from [[https://lisper.in/restarts][Common Lisp: A Tutorial on Conditions and Restarts]]
+to use Clojure with the [[https://github.com/pangloss/pure-conditioning][Pure Conditioning]] library.
+
+One good introduction to this is the chapter on conditions and restarts in Peter Seibel’s excellent book, [[http://gigamonkeys.com/book/beyond-exception-handling-conditions-and-restarts.html][Practical Common Lisp]]. This tutorial assumes some knowledge of the condition system, so you might want to read that chapter before proceeding. Another good read is Kent Pitman’s paper, [[http://www.nhplace.com/kent/Papers/Condition-Handling-2001.html][Condition Handling in the Lisp Language Family]].
+
+I’ll attempt to show how effective the pure-conditioning system can be, with a validator for CSV (comma-separated values) files. The validator will check that all the fields in each row of the file are valid (according to some defined criteria).
+
+** Getting started
+
+Our ~deps.edn~ file can be very simple for this example. We only need the
+pure-conditioning library.
+
+#+begin_src clojure :mkdirp yes :noweb yes :tangle tutorial/deps.edn
+{:paths ["src"]
+ :deps {com.xn--lgc/pure-conditioning {:mvn/version "0.1.0"}}}
+#+end_src
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (ns tutorial
+    (:require [conditions :refer :all]
+              [clojure.java.io :refer [reader]]
+              [clojure.string :as str]
+              [clojure.test :refer [deftest is]]))
+#+end_src
+
+** The CSV
+
+The first row of the CSV will be a comma-separated list of headers, followed by rows with each column corresponding to the headers in the first row. A sample file looks like this:
+
+#+begin_example
+rating,url,visitors,date
+4,http://chaitanyagupta.com/home,1233445,2000-01-01
+5,http://chaitanyagupta.com/blog,33333,2006-02-02
+5,http://chaitanyagupta.com/code,2121212,2007-03-03
+#+end_example
+
+First we write functions to validate fields for the four headers we used above: ~rating~, ~url~, ~visitors~, and ~date~.
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (defn validate-url
+    "The URL of the page; should start with http:// or https://."
+    [string]
+    (when-not (re-matches #"^https?://.*" string)
+      (condition :url-invalid (restarts {:url string})
+                 (error "URL invalid"))))
+
+  (defn validate-rating
+    "String should contain an integer between 1 and 5, inclusive."
+    [string]
+    (let [rating (read-string string)]
+      (when-not (and (int? rating) (<= 1 rating 5))
+        (condition :invalid-rating (restarts {:rating rating})
+                   (error "Rating is not an integer in range")))))
+
+  (defn validate-visitors
+    "The number of visitors to the page; string should contain an
+    integer more than or equal to zero."
+    [string]
+    (let [visitors (read-string string)]
+      (when-not (nat-int? visitors)
+        (condition :invalid-visitors (restarts {:visitors visitors})
+                   (error "Number of visitors invalid")))))
+
+  (defn validate-date
+    "The published date of the URL. Should be in yyyy-mm-dd format."
+    [string]
+    (when-not (re-matches #"^\d{4}-\d{2}-\d{2}$" string)
+      (condition :invalid-date (restarts {:date string})
+                 (error "Published date not in valid format"))))
+#+end_src
+
+All of these functions check the validation criteria and if there is an error,
+they signal a restartable condition which will raise an error with the given
+message if not handled. They all attach their relevant data to the condition as well.
+
+To associate these functions to the fields they validate, we will register them
+in a simple dictionary:
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (def validators {"url"      validate-url
+                   "rating"   validate-rating
+                   "visitors" validate-visitors
+                   "date"     validate-date})
+#+end_src
+
+
+** Signalling validation errors
+
+The Common Lisp tutorial has a section on defining an error type, but this system
+works differently and does not need condition types to be pre-defined.
+
+** Parsing the CSV
+
+The parser converts raw CSV text into a list of lists – each item in these lists
+corresponds to a field in the CSV.
+
+(Now is a good time to mention that this CSV parser is for illustration purposes
+only, and you should use a real CSV library for parsing.)
+
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+(defn parse-csv-file [file]
+  (with-open [f (reader file)]
+    (mapv #(str/split % #",") (line-seq f))))
+#+end_src
+
+** The Validator (sans the restarts)
+
+Finally, we get down to writing the validator, ~validate-csv~. If the validation is succesful (i.e. all the fields in the CSV are valid), the function returns normally. If any invalid field is present, an error will be signalled (using the validator functions defined above).
+
+This version of the validator doesn’t contain any restarts though.
+
+#+begin_src clojure :tangle no
+  (defn validate-field
+   "Takes a header name and a string value as arguments; checks the
+    validity of the value by calling the appropriate validator function."
+    [header value]
+    (if-let [f (validators header)]
+      (f value)
+      (condition :invalid-header {:header header})))
+
+  (defn validate-csv [file]
+    (let [[headers & rows :as all-rows] (parse-csv-file file)]
+      (map (fn [line-number row]
+             (if (not= (count row) (count headers))
+               (condition :wrong-field-count {:line-number line-number}
+                          (error "Number of fields doesn't equal number of headers."))
+               (manage [any? (fall-through #(assoc % :line-number line-number))]
+                       (mapv validate-field headers row))))
+           (range 2 (count all-rows))
+           rows)))
+#+end_src
+
+** Unhandled conditions
+
+If the condition is not handled, the default action will be called. For instance
+this code, will by default raise a normal exception much like if the following
+code were there in its place instead , meaning that this system is fully
+compatible with the standard Java exceptions used by Clojure.
+
+#+begin_example clojure
+(condition :the-condition the-data (error "The condition happened"))
+;; if not handled, equivalent to:
+(throw (ex-info "The condition happened" {:condition :the-condition :value the-data}))
+#+end_example
+
+** Putting restarts in place
+
+There are a few actions we can take once an “invalid” field has been detected (i.e. a condition is signalled), e.g. we can abort the validation, we can continue validation on the next row, or we continue validation with the remaining fields in the same row (to name just a few).
+
+To enable restarts, we just wrap the value passed to the condition in ~(restarts
+...)~, which attaches the necessary information needed to perform the restart to
+the condition.
+
+#+begin_src clojure :tangle no
+  (declare validate-field) ;; defined below
+
+  (defn validate-csv [file]
+    (let [[headers & rows :as all-rows] (parse-csv-file file)]
+      (map (fn [line-number row]
+             (manage [:continue-next-row (result! nil)]
+                     (if (not= (count row) (count headers))
+                       (condition :wrong-field-count (restarts {:line-number line-number})
+                                  (error "Number of fields doesn't equal number of headers."))
+                       (manage [any? (fall-through #(assoc % :line-number line-number))]
+                               (manage [:continue-next-field (result! nil)]
+                                       (mapv validate-field headers row))))))
+           (range 2 (count all-rows))
+           rows)))
+#+end_src
+
+We'll also make the ~:invalid-header~ condition restartable.
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (defn validate-field [header value]
+    (if-let [f (validators header)]
+      (f value)
+      (condition :invalid-header (restarts {:header header}))))
+#+end_src
+
+
+Time for some fun now. Pass an invalid file to the validator, and what do we
+see? Our two restart handlers are visible in the exception: ~:continue-next-field~, and
+~:continue-next-row~. 
+
+#+begin_example clojure :tangle no
+(validate-csv:2:ignore-errors "test/tutorial.csv")
+;; ExceptionInfo:
+   URL invalid
+   {:condition :url-invalid,
+    :value
+    {:data {:url "gopher://untether.ai", :line-number 3},
+     :handlers
+     [{}
+      {:continue-next-row #function[clojure.lang.AFunction/1]}
+      {#function[clojure.core/any?] #function[conditions.handlers/fall-through/fn--15590]}
+      {:continue-next-field #function[clojure.lang.AFunction/1]}],
+     :condition :url-invalid,
+     :message "URL invalid"}}
+#+end_example
+
+We'll see how to use the restarts in the next section.
+
+** Starting all over again
+
+We’ll add one more restart now: this will allow us to revalidate the whole file
+if an error is signalled. ~retry!~ is a special handler since in an immutable
+language you usually need to be able to provide some update to the data in order
+to effectively retry. Here we use ~retryable~ and add the extra argument ~[file]~
+which tells us that when we call ~(retry! file)~ the file argument of the
+retryable body should be set to the new value provided. In this case, however,
+we are relying on the file itself being changed before the upstream handler
+retries, so the retry is performed without modification to the arguments.
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (defn validate-csv [file]
+    (retryable [file] [:retry-file (retry! file)]
+      (let [[headers & rows :as all-rows] (parse-csv-file file)]
+        (doall
+        (map (fn [line-number row]
+                (manage [:continue-next-row (result! nil)]
+                  (if (not= (count row) (count headers))
+                    (condition :wrong-field-count (restarts {:line-number line-number})
+                              (error "Number of fields doesn't equal number of headers."))
+                    (manage [any? (fall-through #(assoc % :line-number line-number))]
+                      (manage [:continue-next-field (result! nil)]
+                        (mapv validate-field headers row))))))
+              (range 2 (count all-rows))
+              rows)))))
+#+end_src
+
+Now what happens if we pass an invalid file to validate-csv? We get the
+~:retry-file~ handler in the exception. This means that we can fix the problematic
+field, save the file, and start the validation all over again, without having
+restarted the overarching process, even if the handler is far up the call stack.
+
+** Handling restarts
+
+To activate a restart, we can use ~restart~ or ~restart-any~, the latter allowing an
+ordered list of restarts, where it will use the first one present.
+
+For example, the following function will continue validating the file as long as
+conditions that it can handle are signalled and one of ~:continue-next-field~ or
+~:continue-next-row~ restarts are available. It collects those errors in a list
+and returns it.
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (defn list-csv-errors [file]
+    (let [result (atom [])]
+      (manage [any? (restart-any :continue-next-field :continue-next-row)]
+        (manage [any? (fall-through ^:restart (fn [error]
+                                                (swap! result conj (assoc (:data error)
+                                                                          :condition (:condition error)
+                                                                          :message (:message error)))
+                                                error))]
+          (validate-csv file)))
+      @result))
+#+end_src
+
+#+begin_example clojure :tangle no :noweb-ref tutorial
+(list-csv-errors "test/tutorial.csv")
+;; => [{:url "gopher://untether.ai", :line-number 3, :condition :url-invalid, :message "URL invalid"}
+;;     {:rating 'five, :line-number 4, :condition :invalid-rating, :message "Rating is not an integer in range"}
+;;     {:line-number 5, :condition :wrong-field-count, :message "Number of fields doesn't equal number of headers."}]
+#+end_example
+
+If we want a non-programmer to use the validator, we can provide a way to upload the CSV file and give a nicely formatted output of ~list-csv-errors~ in the browser.
+
+** Conclusion
+
+If we wanted ~list-csv-errors~ to list only one error per each row, that change would have been trivial, thanks to the restarts we have provided. This separation of logic, IMHO, makes it a very elegant tool in dealing with problems like these.
+
+What I really like about the condition system is how it allows one to defer decisions to higher-level functions. The low-level functions provide different ways to move forward in case of exceptions (this is what ~validate-csv~ does), while the higher-level functions actually get to decide what path to take (like ~list-csv-errors~).
+
+*** Testing this code
+
+This code can be exported from this .org file using Emacs with the following
+command:
+
+#+begin_example emacs-lisp
+(org-babel-tangle-file "tutorial.org")
+#+end_example
+
+The test data and test definition are below.
+
+#+begin_src c :mkdirp yes :noweb yes :tangle tutorial/tutorial.csv
+url,rating,visitors,date
+https://untether.ai,5,1000,2020-02-20
+gopher://untether.ai,5,1000,2020-02-20
+https://untether.ai,five,1000,2020-02-20
+5,1000,2020-02-20
+#+end_src
+
+#+begin_src clojure :tangle no :noweb-ref tutorial
+  (deftest correct-error-list
+    (is (= [{:url "gopher://untether.ai", :line-number 3, :condition :url-invalid, :message "URL invalid"}
+            {:rating 'five, :line-number 4, :condition :invalid-rating, :message "Rating is not an integer in range"}
+            {:line-number 5, :condition :wrong-field-count, :message "Number of fields doesn't equal number of headers."}]
+           (list-csv-errors "test/tutorial.csv"))))
+#+end_src
+
+#+begin_src clojure :mkdirp yes :noweb yes :tangle tutorial/src/tutorial.clj
+  <<tutorial>>
+#+end_src
+
