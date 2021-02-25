@@ -12,6 +12,8 @@
 
 <!-- markdown-toc end -->
 
+[![Clojars Project](https://img.shields.io/clojars/v/com.xn--lgc/pure-conditioning.svg)](https://clojars.org/com.xn--lgc/pure-conditioning)
+
 [Pure Conditioning](https://github.com/pangloss/pure-conditioning) is a purely functional, fast, and cleanly decomplected condition / restart system in Clojure. It does not use exceptions and needs no global state at all.
 
 While global state is not required, it makes things more convenient so stateful variants of all pure functions that make use of a dynamicly bound var are available.
