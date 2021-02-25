@@ -1,5 +1,6 @@
 (ns conditions.handlers
-  (:require [conditions.core :refer [condition*]]))
+  (:require [conditions.core :refer [condition* ->Restarts]])
+  (:import conditions.core.Restarts))
 
 (defn custom
   "Mark a function as a custom handler.
@@ -122,24 +123,30 @@
    (assert (not (nil? next-handler)))
    (remap next-handler f nil))
   ([next-handler f override-normally]
-   (cond
-     (nil? next-handler)
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         ;; Special case to support fall-through which trims the handler stack.
-         ;; Using alone will cause a stack overflow.
-         (condition* handlers condition (f value) (or override-normally normally))))
-     (fn? next-handler)
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         (condition* handlers (next-handler value) (f value) (or override-normally normally))))
-     :else
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         (condition* handlers next-handler (f value) (or override-normally normally)))))))
+   (let [f (fn [value]
+             (if (and (instance? Restarts value)
+                      (not (:restart (meta f))))
+               (with-meta (->Restarts (f (:data value)) (:handlers value))
+                 (meta value))
+               (f value)))]
+     (cond
+       (nil? next-handler)
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           ;; Special case to support fall-through which trims the handler stack.
+           ;; Using alone will cause a stack overflow.
+           (condition* handlers condition (f value) (or override-normally normally))))
+       (fn? next-handler)
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           (condition* handlers (next-handler value) (f value) (or override-normally normally))))
+       :else
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           (condition* handlers next-handler (f value) (or override-normally normally))))))))
 
 (defn fall-through
   "Continue searching for handlers from the parent scope. Similar to `handle` if it were to always return :continue.

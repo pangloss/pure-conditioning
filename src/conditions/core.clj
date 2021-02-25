@@ -49,9 +49,11 @@
      (if normally
        ((normally handlers depth condition normally) arg)
        (throw (ex-info "No handler for condition" {:condition condition :arg arg})))
-     (if-let [response (get (nth handlers depth) condition)]
-       ((response handlers depth condition normally) arg)
-       (recur handlers (dec depth) condition arg normally)))))
+     (let [handlers-at-depth (nth handlers depth)]
+       (if-let [response (or (get handlers-at-depth condition)
+                             (get handlers-at-depth any?))]
+         ((response handlers depth condition normally) arg)
+         (recur handlers (dec depth) condition arg normally))))))
 
 (defn condition
   "Signal that a condition has been encountered using the conditions defined in the *handlers* dynamic var.
@@ -85,6 +87,19 @@
              "When using restart, the signalling condition must provide the handlers to restart.")
      (condition* (:handlers restarts) condition arg normally))))
 
+(defn restart-any
+  [& first-restart]
+  ^:custom
+  (fn [handlers depth condition normally]
+    (fn [restarts]
+      (assert (instance? Restarts restarts)
+              "When using restart, the signalling condition must provide the handlers to restart.")
+      (let [available (set (keys (apply merge (:handlers restarts))))
+            found (some available first-restart)]
+        (if found
+          (condition* (:handlers restarts) found nil nil)
+          (condition* (with-meta handlers {:depth (dec depth)}) depth condition normally))))))
+
 (defn restart-with
   "Calls `(f condition arg default-action)`. Return a vector with
   `[restart-condition restart-data default-action]` which is used to run the
@@ -115,34 +130,6 @@
     (with-meta (constantly (constantly x))
       {:custom true})))
 
-(defmacro restart-cond
-  "When handling restarts, this allows a simple mechanism for conditional handling based on the data provided by the restart.
-
-  Arguments are flattened pairs of predicate functions with related restarts.
-
-  Example:
-
-    (manage [:xyz (restart-cond #(= :x (foo %)) (restart :i-like-x)
-                                #(= :y (foo %)) (restart :i-like-y)
-                                #(= :z (foo %)) (error \"Oh no, it's Z!\"))] ...)"
-  {:see-also ["handler-cond" "restart" "restart-with"]}
-  [& cond-restart-pairs]
-  (let [restarts (gensym "restarts")
-        handlers (gensym "handlers")
-        depth (gensym "depth")
-        condition (gensym "condition")
-        normally (gensym "normally")]
-    `(with-meta
-       (fn [~handlers ~depth ~condition ~normally]
-         (fn [~restarts]
-           (cond ~@(mapcat (fn [[c r]]
-                             `[(~c (:data ~restarts))
-                               (((make-handler ~r) ~handlers ~depth ~c ~normally)
-                                ~restarts)])
-                           (partition 2 cond-restart-pairs))
-                 :else (condition* (with-meta ~handlers {:depth (dec ~depth)}) ~condition ~restarts ~normally))))
-       {:custom true})))
-
 (defmacro handler-cond
   "When handling regular conditions, this allows a simple mechanism for conditional handling based on the data.
 
@@ -163,7 +150,9 @@
        (fn [~handlers ~depth ~condition ~normally]
          (fn [~arg]
            (cond ~@(mapcat (fn [[c r]]
-                             `[(~c ~arg)
+                             `[(~c (if (instance? Restarts ~arg)
+                                     (:data ~arg)
+                                     ~arg))
                                (((make-handler ~r) ~handlers ~depth ~c ~normally)
                                 ~arg)])
                            (partition 2 cond-restart-pairs))
@@ -220,12 +209,18 @@
 (defn- inform-special-handlers [ident condition-handlers]
   (vec
    (interleave (take-nth 2 condition-handlers)
-               (walk/postwalk (fn [f]
-                                (if-let [sh (when (list? f)
-                                              ({'result! `-result! 'retry! `-retry!} (first f)))]
-                                  `(~sh '~ident ~@(rest f))
-                                  f))
-                              (take-nth 2 (rest condition-handlers))))))
+               (->> (take-nth 2 (rest condition-handlers))
+                    ;; wrap naked calls to result! and retry! in functions before they can be called:
+                    (map (fn [f]
+                           (if (and (list? f) (#{'result! 'retry!} (first f)))
+                             `(fn [arg#] ~f)
+                             f)))
+                    ;; replace result! and retry! calls with internal versions given the block ident:
+                    (walk/postwalk (fn [f]
+                                     (if-let [sh (when (list? f)
+                                                   ({'result! `-result! 'retry! `-retry!} (first f)))]
+                                       `(~sh '~ident ~@(rest f))
+                                       f)))))))
 
 (defmacro retryable-fn*
   "Returns a function of `args` that can support the `retry!` and `result!` functions in its condition handlers.
