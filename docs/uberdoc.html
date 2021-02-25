@@ -2868,7 +2868,8 @@ net.brehaut.ClojureTools = (function (SH) {
 </script><title>conditioner -- Marginalia</title></head><body><table><tr><td class="docs"><div class="header"><h1 class="project-name"><a href="http://example.com/FIXME">conditioner</a></h1><h2 class="project-version">0.1.0-SNAPSHOT</h2><br /><p>FIXME: write description</p>
 </div></td><td class="codes" style="text-align: center; vertical-align: middle;color: #666;padding-right:20px"><br /><br /><br />(this space intentionally left almost blank)</td></tr><tr><td class="docs"><div class="toc"><a name="toc"><h3>namespaces</h3></a><ul><li><a href="#conditions.handlers">conditions.handlers</a></li><li><a href="#conditions.core">conditions.core</a></li><li><a href="#conditions">conditions</a></li></ul></div></td><td class="codes">&nbsp;</td></tr><tr><td class="docs"><div class="docs-header"><a class="anchor" href="#conditions.handlers" name="conditions.handlers"><h1 class="project-name">conditions.handlers</h1><a class="toc-link" href="#toc">toc</a></a></div></td><td class="codes" /></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(ns conditions.handlers
-  (:require [conditions.core :refer [condition*]]))</pre></td></tr><tr><td class="docs"><p>Mark a function as a custom handler.</p>
+  (:require [conditions.core :refer [condition*]])
+  (:import conditions.core.Restarts))</pre></td></tr><tr><td class="docs"><p>Mark a function as a custom handler.</p>
 
 <p>  A custom handler is a function <code>(f handlers depth condition normally)</code> that returns a function <code>(f' value)</code>.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn custom
@@ -2969,24 +2970,30 @@ net.brehaut.ClojureTools = (function (SH) {
    (assert (not (nil? next-handler)))
    (remap next-handler f nil))
   ([next-handler f override-normally]
-   (cond
-     (nil? next-handler)
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         ;; Special case to support fall-through which trims the handler stack.
-         ;; Using alone will cause a stack overflow.
-         (condition* handlers condition (f value) (or override-normally normally))))
-     (fn? next-handler)
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         (condition* handlers (next-handler value) (f value) (or override-normally normally))))
-     :else
-     ^:custom
-     (fn [handlers depth condition normally]
-       (fn [value]
-         (condition* handlers next-handler (f value) (or override-normally normally)))))))</pre></td></tr><tr><td class="docs"><p>Continue searching for handlers from the parent scope. Similar to <code>handle</code> if it were to always return :continue.</p>
+   (let [f (fn [value]
+             (if (and (instance? Restarts value)
+                      (not (:restart (meta f))))
+               (with-meta (update value :data f)
+                 (meta value))
+               (f value)))]
+     (cond
+       (nil? next-handler)
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           ;; Special case to support fall-through which trims the handler stack.
+           ;; Using alone will cause a stack overflow.
+           (condition* handlers condition (f value) (or override-normally normally))))
+       (fn? next-handler)
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           (condition* handlers (next-handler value) (f value) (or override-normally normally))))
+       :else
+       ^:custom
+       (fn [handlers depth condition normally]
+         (fn [value]
+           (condition* handlers next-handler (f value) (or override-normally normally))))))))</pre></td></tr><tr><td class="docs"><p>Continue searching for handlers from the parent scope. Similar to <code>handle</code> if it were to always return :continue.</p>
 
 <p>  f alters the value (because if you don't need to do anything at this scope you don't need a handler at all)</p>
 
@@ -3024,7 +3031,8 @@ net.brehaut.ClojureTools = (function (SH) {
   ^:custom
   (fn [handlers depth condition normally]
     (fn [value]
-      (throw (ex-info &quot;No handler specified for condition&quot; {:condition condition :value value})))))</pre></td></tr><tr><td class="docs"><p>Signals a condition in a macro-free, purely functional way.</p>
+      (throw (ex-info &quot;No handler specified for condition&quot; {:condition condition :value value})))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defrecord Restarts [data handlers condition message])</pre></td></tr><tr><td class="docs"><p>Signals a condition in a macro-free, purely functional way.</p>
 
 <p>  The first argument is a stack of handler maps, then the condition being
   raised, the associated value, and optionally the default behaviour.</p>
@@ -3050,23 +3058,28 @@ net.brehaut.ClojureTools = (function (SH) {
          (throw (ex-info &quot;Handler error. No parent handler for condition.&quot; {:condition condition :arg arg})))
        (condition* handlers (or metadepth
                                 (dec (count handlers)))
-                   condition arg normally))))
+                   condition
+                   (if (instance? Restarts arg)
+                     (merge-with (fn [a b] (or a b)) arg {:condition condition :message (:message (meta normally))})
+                     arg)
+                   normally))))
   ([handlers depth condition arg normally]
    (if (&lt; depth 0)
      (if normally
        ((normally handlers depth condition normally) arg)
        (throw (ex-info &quot;No handler for condition&quot; {:condition condition :arg arg})))
-     (if-let [response (get (nth handlers depth) condition)]
-       ((response handlers depth condition normally) arg)
-       (recur handlers (dec depth) condition arg normally)))))</pre></td></tr><tr><td class="docs"><p>Signal that a condition has been encountered using the conditions defined in the <em>handlers</em> dynamic var.</p>
+     (let [handlers-at-depth (nth handlers depth)]
+       (if-let [response (or (get handlers-at-depth condition)
+                             (get handlers-at-depth any?))]
+         ((response handlers depth condition normally) arg)
+         (recur handlers (dec depth) condition arg normally))))))</pre></td></tr><tr><td class="docs"><p>Signal that a condition has been encountered using the conditions defined in the <em>handlers</em> dynamic var.</p>
 
 <p>  Handlers can be defined using the <code>manage</code> macro or the <code>handler</code> function.</p>
 </td><td class="codes"><pre class="brush: clojure">(defn condition
   ([condition arg]
    (condition* *handlers* condition arg))
   ([condition arg normally]
-   (condition* *handlers* condition arg normally)))</pre></td></tr><tr><td class="docs">
-</td><td class="codes"><pre class="brush: clojure">(defrecord Restarts [data handlers])</pre></td></tr><tr><td class="docs"><p>When a condition sends handlers as its payload rather than simple data, then
+   (condition* *handlers* condition arg normally)))</pre></td></tr><tr><td class="docs"><p>When a condition sends handlers as its payload rather than simple data, then
   the handlers can respond by choosing which one to respond to in the context,
   we get something very similar to CL's restart system.</p>
 
@@ -3085,7 +3098,19 @@ net.brehaut.ClojureTools = (function (SH) {
    (fn [restarts]
      (assert (instance? Restarts restarts)
              &quot;When using restart, the signalling condition must provide the handlers to restart.&quot;)
-     (condition* (:handlers restarts) condition arg normally))))</pre></td></tr><tr><td class="docs"><p>Calls <code>(f condition arg default-action)</code>. Return a vector with
+     (condition* (:handlers restarts) condition arg normally))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn restart-any
+  [&amp; first-restart]
+  ^:custom
+  (fn [handlers depth condition normally]
+    (fn [restarts]
+      (assert (instance? Restarts restarts)
+              &quot;When using restart, the signalling condition must provide the handlers to restart.&quot;)
+      (let [available (set (keys (apply merge (:handlers restarts))))
+            found (some available first-restart)]
+        (if found
+          (condition* (:handlers restarts) found nil nil)
+          (condition* (with-meta handlers {:depth (dec depth)}) depth condition normally))))))</pre></td></tr><tr><td class="docs"><p>Calls <code>(f condition arg default-action)</code>. Return a vector with
   <code>[restart-condition restart-data default-action]</code> which is used to run the
   restart.</p>
 
@@ -3111,34 +3136,7 @@ net.brehaut.ClojureTools = (function (SH) {
       {:custom true})
     :else ;; it's just a simple value, so wrap a context handler and a data handler function.
     (with-meta (constantly (constantly x))
-      {:custom true})))</pre></td></tr><tr><td class="docs"><p>When handling restarts, this allows a simple mechanism for conditional handling based on the data provided by the restart.</p>
-
-<p>  Arguments are flattened pairs of predicate functions with related restarts.</p>
-
-<p>  Example:</p>
-
-<pre><code>(manage [:xyz (restart-cond #(= :x (foo %)) (restart :i-like-x)
-                            #(= :y (foo %)) (restart :i-like-y)
-                            #(= :z (foo %)) (error "Oh no, it's Z!"))] ...)
-</code></pre>
-</td><td class="codes"><pre class="brush: clojure">(defmacro restart-cond
-  {:see-also [&quot;handler-cond&quot; &quot;restart&quot; &quot;restart-with&quot;]}
-  [&amp; cond-restart-pairs]
-  (let [restarts (gensym &quot;restarts&quot;)
-        handlers (gensym &quot;handlers&quot;)
-        depth (gensym &quot;depth&quot;)
-        condition (gensym &quot;condition&quot;)
-        normally (gensym &quot;normally&quot;)]
-    `(with-meta
-       (fn [~handlers ~depth ~condition ~normally]
-         (fn [~restarts]
-           (cond ~@(mapcat (fn [[c r]]
-                             `[(~c (:data ~restarts))
-                               (((make-handler ~r) ~handlers ~depth ~c ~normally)
-                                ~restarts)])
-                           (partition 2 cond-restart-pairs))
-                 :else (condition* (with-meta ~handlers {:depth (dec ~depth)}) ~condition ~restarts ~normally))))
-       {:custom true})))</pre></td></tr><tr><td class="docs"><p>When handling regular conditions, this allows a simple mechanism for conditional handling based on the data.</p>
+      {:custom true})))</pre></td></tr><tr><td class="docs"><p>When handling regular conditions, this allows a simple mechanism for conditional handling based on the data.</p>
 
 <p>  Arguments are flattened pairs of conditional functions with related responses.</p>
 
@@ -3148,7 +3146,6 @@ net.brehaut.ClojureTools = (function (SH) {
                             #(= :z (foo %)) (error "Oh no, it's Z!"))] ...)
 </code></pre>
 </td><td class="codes"><pre class="brush: clojure">(defmacro handler-cond
-  {:see-also [&quot;restart-cond&quot;]}
   [&amp; cond-restart-pairs]
   (let [arg (gensym &quot;arg&quot;)
         handlers (gensym &quot;handlers&quot;)
@@ -3159,7 +3156,9 @@ net.brehaut.ClojureTools = (function (SH) {
        (fn [~handlers ~depth ~condition ~normally]
          (fn [~arg]
            (cond ~@(mapcat (fn [[c r]]
-                             `[(~c ~arg)
+                             `[(~c (if (instance? Restarts ~arg)
+                                     (:data ~arg)
+                                     ~arg))
                                (((make-handler ~r) ~handlers ~depth ~c ~normally)
                                 ~arg)])
                            (partition 2 cond-restart-pairs))
@@ -3185,7 +3184,8 @@ net.brehaut.ClojureTools = (function (SH) {
   (-&gt;Restarts data
               (reduce (partial apply handler)
                       handlers
-                      (partition 2 pairs))))</pre></td></tr><tr><td class="docs"><p>Build a set of ways that the condition handler can resume execution.</p>
+                      (partition 2 pairs))
+              nil nil))</pre></td></tr><tr><td class="docs"><p>Build a set of ways that the condition handler can resume execution.</p>
 
 <p>  This is the semi-pure version that does not use the global <em>handlers</em> function
   but still uses the global default-restarts configuration.</p>
@@ -3199,17 +3199,104 @@ net.brehaut.ClojureTools = (function (SH) {
 </td><td class="codes"><pre class="brush: clojure">(defn restarts
   {:style/indent :defn}
   [data &amp; pairs]
-  (restarts* *handlers* data pairs))</pre></td></tr><tr><td class="docs"><p>This is the explicit version of <code>manage</code> that does not use or modify the global <em>handlers</em> var.</p>
+  (restarts* *handlers* data pairs))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defrecord Retry [args])</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- inform-special-handlers [ident condition-handlers]
+  (vec
+   (interleave (take-nth 2 condition-handlers)
+               (-&gt;&gt; (take-nth 2 (rest condition-handlers))
+                    ;; wrap naked calls to result! and retry! in functions before they can be called:
+                    (map (fn [f]
+                           (if (and (list? f) (#{'result! 'retry!} (first f)))
+                             `(fn [arg#] ~f)
+                             f)))
+                    ;; replace result! and retry! calls with internal versions given the block ident:
+                    (walk/postwalk (fn [f]
+                                     (if-let [sh (when (list? f)
+                                                   ({'result! `-result! 'retry! `-retry!} (first f)))]
+                                       `(~sh '~ident ~@(rest f))
+                                       f)))))))</pre></td></tr><tr><td class="docs"><p>Returns a function of <code>args</code> that can support the <code>retry!</code> and <code>result!</code> functions in its condition handlers.</p>
+
+<p>  Arguments:</p>
+
+<ul>
+<li><p><code>ident</code> should usually be nil, but may be a unique identifier to be uesd in
+the ex-data of the exception used to unwind the stack upon retry or result.
+The ex-data is one of:</p>
+
+<p>   {ident :retry :args [arg1 arg2]}
+   {ident :result :result result}</p></li>
+<li><p><code>handlers</code> The parent handlers, usually <em>handlers</em></p></li>
+<li><code>handler-binding</code> a symbol that will be the new handlers within the block.</li>
+<li><code>args</code> the function args and also the args that must be provided when calling <code>retry!</code></li>
+<li><code>condition-handlers</code> the handlers used in the manage block within this function'</li>
+<li><code>forms</code> the body within the manage block.</li>
+</ul>
+</td><td class="codes"><pre class="brush: clojure">(defmacro retryable-fn*
+  {:style/indent 4 :see-also [&quot;retryable&quot; &quot;manage*&quot; &quot;manage&quot;]}
+  [ident handlers [handler-binding &amp; args] condition-handlers &amp; forms]
+  (let [ident (or ident (gensym))
+        result-args (gensym &quot;args&quot;)
+        condition-handlers (inform-special-handlers ident condition-handlers)]
+    `(fn [~@args]
+       (let [result#
+             (manage* ~handlers [~handler-binding] ~condition-handlers
+                      (try
+                        ~@forms
+                        (catch clojure.lang.ExceptionInfo e#
+                          (let [data# (ex-data e#)]
+                            (case ('~ident data#)
+                              :retry (Retry. (:args data#))
+                              :result (:result data#)
+                              (throw e#))))))]
+         (if (instance? Retry result#)
+           (let [~result-args (.args result#)]
+             (recur ~@(map-indexed (fn [i _] `(nth ~result-args ~i)) args)))
+           result#)))))</pre></td></tr><tr><td class="docs"><p>A kind of <code>manage</code> block that can support the <code>retry!</code> and <code>result!</code> functions in its condition handlers.</p>
+
+<p>  Arguments:</p>
+
+<ul>
+<li><code>condition-handlers</code> the handlers used in the manage block within this function'</li>
+<li><code>args</code> the function args and also the args that must be provided when calling <code>retry!</code></li>
+<li><code>forms</code> the body within the manage block.</li>
+</ul>
+</td><td class="codes"><pre class="brush: clojure">(defmacro retryable
+  {:style/indent 2 :see-also [&quot;retryable-fn*&quot; &quot;manage&quot;]}
+  [[&amp; args] condition-handlers &amp; forms]
+  `((retryable-fn* nil *handlers* [handlers# ~@args] ~condition-handlers
+                   (binding [*handlers* handlers#]
+                     ~@forms))
+    ~@args))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn result! [result]
+  (throw (ex-info &quot;result! must be used within manage, retryable or retryable-fn* blocks.&quot; {::special-handler :result :result result})))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn retry! [&amp; args]
+  (throw (ex-info &quot;retry! must be used within retryable or retryable-fn* blocks.&quot; {::special-handler :retry :args args})))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn -result! [ident result]
+  (throw (ex-info &quot;-result! must be used within manage, retryable or retryable-fn* blocks.&quot; {ident :result ::special-handler :result :result result})))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn -retry! [ident &amp; args]
+  (throw (ex-info &quot;-retry! must be used within retryable or retryable-fn* blocks.&quot; {ident :retry ::special-handler :retry :args args})))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- result? [condition-handlers]
+  (-&gt;&gt; (rest condition-handlers)
+       (take-nth 2)
+       (tree-seq (fn [x] ((some-fn seq? list?) x)) seq)
+       (some (fn [f] (and (list? f) (= 'result! (first f)))))))</pre></td></tr><tr><td class="docs">
+</td><td class="codes"><pre class="brush: clojure">(defn- retry? [condition-handlers]
+  (-&gt;&gt; (rest condition-handlers)
+       (take-nth 2)
+       (tree-seq (fn [x] ((some-fn seq? list?) x)) seq)
+       (some (fn [f] (and (list? f) (= 'retry! (first f)))))))</pre></td></tr><tr><td class="docs"><p>This is the explicit version of <code>manage</code> that does not use or modify the global <em>handlers</em> var.</p>
 
 <p>  Note in the example that the handlers need to be explicitly passed around, and
   that the some-handlers value is unchanged and still useable without the
   inclusion of the handler added in this call:</p>
 
-<pre><code>  (manage* some-handlers [:file-not-found alternate-filename] [new-handlers]
+<pre><code>  (manage* some-handlers [new-handlers] [:file-not-found alternate-filename]
     (open-file new-handlers my-file)
 </code></pre>
 </td><td class="codes"><pre class="brush: clojure">(defmacro manage*
-  [handlers condition-handlers [handler-binding] &amp; forms]
+  {:see-also [&quot;manage&quot; &quot;retryable-fn*&quot;]}
+  [handlers [handler-binding] condition-handlers &amp; forms]
   (assert (vector? condition-handlers))
   (when-not (even? (count condition-handlers))
     (throw (ex-info &quot;manage condition-handlers must contain an even number of forms&quot;)))
@@ -3237,11 +3324,17 @@ net.brehaut.ClojureTools = (function (SH) {
   confusing because it seems like the condition is defined but it just won't do
   anything!</p>
 </td><td class="codes"><pre class="brush: clojure">(defmacro manage
-  {:style/indent :defn}
+  {:style/indent :defn :see-also [&quot;retryable&quot;]}
   [condition-handlers &amp; forms]
-  `(manage* *handlers* ~condition-handlers [handlers#]
-            (binding [*handlers* handlers#]
-              ~@forms)))</pre></td></tr><tr><td class="docs"><p>Capture the global handlers into a local var. Use the handlers together with
+  (cond
+    (retry? condition-handlers)
+    (throw (ex-info &quot;retry! must be used within retryable or retryable-fn* blocks.&quot; {:handlers condition-handlers}))
+    (result? condition-handlers)
+    `(retryable [] ~condition-handlers ~@forms)
+    :else
+    `(manage* *handlers* [handlers#] ~condition-handlers
+              (binding [*handlers* handlers#]
+                ~@forms))))</pre></td></tr><tr><td class="docs"><p>Capture the global handlers into a local var. Use the handlers together with
   <code>condition*</code> instead of using <code>condition</code> to be certain about behavior in
   complex scenarios involving lazy seq's etc.</p>
 </td><td class="codes"><pre class="brush: clojure">(defmacro with-handlers
@@ -3298,7 +3391,9 @@ net.brehaut.ClojureTools = (function (SH) {
   (:require conditions.core conditions.handlers
             [potemkin :refer [import-vars]]))</pre></td></tr><tr><td class="docs">
 </td><td class="codes"><pre class="brush: clojure">(import-vars
- (conditions.core condition* condition restarts** restarts* restarts restart restart-cond restart-with handler handler-cond
+ (conditions.core condition* condition restarts** restarts* restarts restart
+                  restart-any restart-with handler handler-cond
+                  retry! result! retryable retryable-fn*
                   manage* manage lazy-conditions with-handlers global-handler!)
  (conditions.handlers custom error error* exception trace trace-value optional required
                       default handle remap fall-through sibling))</pre></td></tr><tr><td class="docs">
