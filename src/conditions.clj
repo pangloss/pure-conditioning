@@ -15,11 +15,11 @@
   ([x]
    (when *assert*
      `(when-not ~x
-        (condition :assert-failed '~x
+        (condition :assert-failed (restarts {:assertion '~x})
                    (exception AssertionError (str "Assert failed: " (pr-str '~x)))))))
   ([x message]
    (when *assert*
      `(when-not ~x
-        (condition :assert-failed '~x
+        (condition :assert-failed (restarts {:assertion '~x})
                    (exception AssertionError
                               (str "Assert failed: " ~message "\n" (pr-str '~x))))))))

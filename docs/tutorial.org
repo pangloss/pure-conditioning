@@ -291,6 +291,7 @@ https://untether.ai,5,1000,2020-02-20
 gopher://untether.ai,5,1000,2020-02-20
 https://untether.ai,five,1000,2020-02-20
 5,1000,2020-02-20
+
 #+end_src
 
 #+begin_src clojure :tangle no :noweb-ref tutorial
@@ -298,7 +299,7 @@ https://untether.ai,five,1000,2020-02-20
     (is (= [{:url "gopher://untether.ai", :line-number 3, :condition :url-invalid, :message "URL invalid"}
             {:rating 'five, :line-number 4, :condition :invalid-rating, :message "Rating is not an integer in range"}
             {:line-number 5, :condition :wrong-field-count, :message "Number of fields doesn't equal number of headers."}]
-           (list-csv-errors "test/tutorial.csv"))))
+           (list-csv-errors "tutorial.csv"))))
 #+end_src
 
 #+begin_src clojure :mkdirp yes :noweb yes :tangle tutorial/src/tutorial.clj
