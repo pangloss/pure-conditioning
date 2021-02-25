@@ -1,7 +1,8 @@
 (ns tutorial
   (:require [conditions :refer :all]
             [clojure.java.io :refer [reader]]
-            [clojure.string :as str]))
+            [clojure.string :as str]
+            [clojure.test :refer [deftest is]]))
 
 (defn validate-url
   "The URL of the page; should start with http:// or https://."
@@ -94,10 +95,16 @@
   (let [result (atom [])]
     (manage [any? (restart-any :continue-next-field :continue-next-row)]
       (manage [any? (fall-through ^:restart (fn [error]
-                                              (swap! result conj error)
+                                              (swap! result conj (assoc (:data error)
+                                                                        :condition (:condition error)
+                                                                        :message (:message error)))
                                               error))]
         (validate-csv file)))
     @result))
 
 
-(list-csv-errors "test/tutorial.csv")
+(deftest correct-error-list
+  (is (= [{:url "gopher://untether.ai", :line-number 3, :condition :url-invalid, :message "URL invalid"}
+          {:rating 'five, :line-number 4, :condition :invalid-rating, :message "Rating is not an integer in range"}
+          {:line-number 5, :condition :wrong-field-count, :message "Number of fields doesn't equal number of headers."}]
+         (list-csv-errors "test/tutorial.csv"))))

@@ -17,6 +17,8 @@
     (fn [value]
       (throw (ex-info "No handler specified for condition" {:condition condition :value value})))))
 
+(defrecord Restarts [data handlers condition message])
+
 (defn condition*
   "Signals a condition in a macro-free, purely functional way.
 
@@ -43,7 +45,11 @@
          (throw (ex-info "Handler error. No parent handler for condition." {:condition condition :arg arg})))
        (condition* handlers (or metadepth
                                 (dec (count handlers)))
-                   condition arg normally))))
+                   condition
+                   (if (instance? Restarts arg)
+                     (merge-with (fn [a b] (or a b)) arg {:condition condition :message (:message (meta normally))})
+                     arg)
+                   normally))))
   ([handlers depth condition arg normally]
    (if (< depth 0)
      (if normally
@@ -63,8 +69,6 @@
    (condition* *handlers* condition arg))
   ([condition arg normally]
    (condition* *handlers* condition arg normally)))
-
-(defrecord Restarts [data handlers])
 
 (defn restart
   "When a condition sends handlers as its payload rather than simple data, then
@@ -184,7 +188,8 @@
   (->Restarts data
               (reduce (partial apply handler)
                       handlers
-                      (partition 2 pairs))))
+                      (partition 2 pairs))
+              nil nil))
 
 (defn restarts*
   "Build a set of ways that the condition handler can resume execution.
@@ -405,6 +410,3 @@
   "Add a handler to the default value and bottom scope of *handlers*."
   [condition value]
   (alter-var-root #'*handlers* handler condition value))
-
-
-

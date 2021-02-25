@@ -1,5 +1,5 @@
 (ns conditions.handlers
-  (:require [conditions.core :refer [condition* ->Restarts]])
+  (:require [conditions.core :refer [condition*]])
   (:import conditions.core.Restarts))
 
 (defn custom
@@ -126,7 +126,7 @@
    (let [f (fn [value]
              (if (and (instance? Restarts value)
                       (not (:restart (meta f))))
-               (with-meta (->Restarts (f (:data value)) (:handlers value))
+               (with-meta (update value :data f)
                  (meta value))
                (f value)))]
      (cond
