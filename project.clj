@@ -1,8 +1,8 @@
-(defproject conditioner "0.1.0-SNAPSHOT"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+(defproject xn--lgc/pure-conditioning "0.1.0"
+  :description "A simple, fast, purely functional condition / restart system for Clojure"
+  :url "https://www.xn--lgc.com/pure-conditioning"
+  :license {:name "MIT"
+            :url "https://opensource.org/licenses/MIT"}
 
   :plugins [[lein-tools-deps "0.4.3"]
             [lein-marginalia "0.9.1"]]
