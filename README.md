@@ -22,6 +22,10 @@ While global state is not required, it makes things more convenient so stateful 
 
 I've tried a variety of error handling libraries and techniques, including the approach that Chris Houser presented a few years ago, which was probably the most successful of them, but still not totally satisfying and far from the capability of CL conditions and restarts. This library comes closer to any approach I've seen, while making basically no compromises on speed, syntax or compatibility with the Clojure world.
 
+## Tutorial and Background info
+
+To help you understand what this library is and what it's good for, the [tutorial here](/pangloss/pure-conditioning/blob/master/docs/tutorial.org) is probably a good place to start. I also recommend the excellent chapter on conditions and restarts in Peter Seibel’s excellent book, [Practical Common Lisp](http://gigamonkeys.com/book/beyond-exception-handling-conditions-and-restarts.html).
+
 ## Conditions in Clojure
 
 I'll start here by showing some basic behavior and then move on to restarts and examples pulled directly from the CL documentation that I've come across.
