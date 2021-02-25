@@ -24,7 +24,7 @@ I've tried a variety of error handling libraries and techniques, including the a
 
 ## Tutorial and Background info
 
-To help you understand what this library is and what it's good for, the [tutorial here](/pangloss/pure-conditioning/blob/master/docs/tutorial.org) is probably a good place to start. I also recommend the excellent chapter on conditions and restarts in Peter Seibel’s excellent book, [Practical Common Lisp](http://gigamonkeys.com/book/beyond-exception-handling-conditions-and-restarts.html).
+To help you understand what this library is and what it's good for, the [tutorial here](/docs/tutorial.org) is probably a good place to start. I also recommend the excellent chapter on conditions and restarts in Peter Seibel’s excellent book, [Practical Common Lisp](http://gigamonkeys.com/book/beyond-exception-handling-conditions-and-restarts.html).
 
 ## Conditions in Clojure
 
