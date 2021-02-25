@@ -143,7 +143,6 @@
 
     (manage [:xyz (handler-cond #(= :x (foo %)) :i-like-x
                                 #(= :z (foo %)) (error \"Oh no, it's Z!\"))] ...)"
-  {:see-also ["restart-cond"]}
   [& cond-restart-pairs]
   (let [arg (gensym "arg")
         handlers (gensym "handlers")

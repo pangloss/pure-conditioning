@@ -1,6 +1,6 @@
 (ns core-test
   (:require  [clojure.test :as t]
-             [conditions :refer [manage condition lazy-conditions handler-cond restart-cond restart restarts
+             [conditions :refer [manage condition lazy-conditions handler-cond restart restarts
                                  retryable retryable-fn* retry! result! condition*
                                  remap required sibling fall-through error exception default handle trace]]))
 
@@ -51,18 +51,18 @@
 
 
 (t/deftest cond-handlers
-  (manage [:restart/x (restart-cond :c #(:data %)
+  (manage [:restart/x (handler-cond :c #(:data %)
                                     :d (error "Oh noes!"))
            :cond/x (handler-cond :a (default 99)
                                  :b "It's still B"
                                  :c identity
                                  :d (error "Oh bother"))]
-    (manage [:restart/x (restart-cond :a (restart :do-a)
+    (manage [:restart/x (handler-cond :a (restart :do-a)
                                       :b "It's B")]
       (let [r (restarts {:a true :b true :c true :d true}
                 :do-a "A+")
             arg {:a true :b true :c true :d true}]
-        (t/testing "different flavors of restart-cond "
+        (t/testing "different flavors of handler-cond "
           (t/is (= "A+"
                    (condition :restart/x r (error "Darn this is wrong"))))
           (t/is (= "It's B"
