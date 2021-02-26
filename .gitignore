@@ -2,3 +2,4 @@
 /.cpcache/
 /target
 /docs/tutorial/
+pom.xml*
