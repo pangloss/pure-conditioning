@@ -14,7 +14,7 @@ pure-conditioning library.
 
 #+begin_src clojure :mkdirp yes :noweb yes :tangle tutorial/deps.edn
 {:paths ["src"]
- :deps {com.xn--lgc/pure-conditioning {:mvn/version "0.1.0"}}}
+ :deps {com.xn--lgc/pure-conditioning {:mvn/version "0.1.1"}}}
 #+end_src
 
 #+begin_src clojure :tangle no :noweb-ref tutorial
