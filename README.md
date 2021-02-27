@@ -189,7 +189,7 @@ Or if the startup is growing perhaps the manager needs to check the vacation pol
 (manage [:vacation-policy (restart :winter)]
   (manage [:request-vacation
            (restart-with
-            (fn [_ _ _]
+            (fn [condition arg default-action]
               (condition :vacation-policy
                          (restarts nil
                                    :summer [:summer "2 weeks"]
