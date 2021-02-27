@@ -4,11 +4,12 @@
             [potemkin :refer [import-vars]]))
 
 (import-vars
- (conditions.core condition* condition restarts** restarts* restarts restart
-                  restart-any restart-with handler handler-cond
+ (conditions.core condition* condition restarts** restarts* restarts
+                   handler handler-cond
                   retry! result! retryable retryable-fn*
                   manage* manage lazy-conditions with-handlers global-handler!)
  (conditions.handlers custom error error* exception trace trace-value optional required
+                      restart restart-any restart-with
                       default handle remap fall-through sibling))
 
 (defmacro assert

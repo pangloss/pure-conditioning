@@ -6,6 +6,7 @@
 
   :dependencies [[org.clojure/clojure "1.10.2" :scope "provided"]
                  [potemkin/potemkin "0.4.5"]]
+  :global-vars {*warn-on-reflection* true}
   :plugins [[lein-tools-deps "0.4.3"]
             [lein-marginalia "0.9.1"]]
 

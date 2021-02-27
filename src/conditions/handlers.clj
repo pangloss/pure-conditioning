@@ -1,5 +1,5 @@
 (ns conditions.handlers
-  (:require [conditions.core :refer [condition*]])
+  (:require [conditions.core :refer [condition* restarts**]])
   (:import conditions.core.Restarts))
 
 (defn custom
@@ -177,3 +177,69 @@
      ^:custom
      (fn [handlers depth condition normally]
        (remapped (with-meta handlers {:depth depth}) depth condition (or override-normally normally))))))
+
+(defn restart
+  "When a condition sends handlers as its payload rather than simple data, then
+  the handlers can respond by choosing which one to respond to in the context,
+  we get something very similar to CL's restart system.
+
+  In that scenario, use the restart helper, which enables them to be expressed clearly.
+
+  Usage:
+
+       (manage [:on-div-zero (restart :use-value 1)]
+         (determine-infinity))"
+  ([condition]
+   (restart condition nil nil))
+  ([condition arg]
+   (restart condition arg nil))
+  ([condition arg normally]
+   (fn [restarts]
+     (assert (instance? Restarts restarts)
+             (str "restart can only be used for restartable conditions. The condition "
+                  condition " was raised without using (restarts ...)"))
+     (condition* (:handlers restarts) condition arg normally))))
+
+(defn restart-with
+  "Calls `(f condition arg default-action)`. Return a vector with
+  `[restart-condition restart-data default-action]` which is used to run the
+  restart.
+
+  - `restart-data` and `default-action` are optional."
+  ([f]
+   ^:custom
+   (fn [handlers depth condition normally]
+     (fn [restarts]
+       (assert (instance? Restarts restarts)
+               (str "restart-with can only be used for restartable conditions. The condition "
+                    condition " was raised without using (restarts ...)"))
+       (let [r (f condition (:data restarts) normally)]
+         (cond (:custom (meta r)) (condition* (:handlers restarts) nil nil r)
+               (sequential? r) (apply condition* (:handlers restarts) r)
+               :else (condition* (:handlers restarts) r)))))))
+
+(defn restart-any
+  "Provide a list of restarts to try. If any of them are available, use it. Otherwise fall through."
+  [& first-restart]
+  ^:custom
+  (fn [handlers depth condition normally]
+    (fn [restarts]
+      (assert (instance? Restarts restarts)
+              (str "restart-any can only be used for restartable conditions. The condition "
+                   condition " was raised without using (restarts ...)"))
+      (let [available (apply merge (:handlers restarts))
+            found (some (fn [r]
+                          (if (available r)
+                            [r nil nil]
+                            (when (and (vector? r) (available (first r)))
+                              (case (count r)
+                                1 (conj r nil nil)
+                                2 (conj r nil)
+                                3 r
+                                (condition ::matched-invalid-restart
+                                           (restarts** (with-meta handlers {}) r [:trim (subvec r 0 3)])
+                                           (error "In restart-any, too many arguments were provided for the matched restart"))))))
+                        first-restart)]
+        (if found
+          (apply condition* (:handlers restarts) found)
+          (condition* (with-meta handlers {:depth (dec depth)}) depth condition normally))))))

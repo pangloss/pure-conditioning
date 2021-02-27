@@ -1,5 +1,5 @@
 (ns tutorial
-  (:require [conditions :refer :all]
+  (:require [conditions :refer :all :exclude [assert]]
             [clojure.java.io :refer [reader]]
             [clojure.string :as str]
             [clojure.test :refer [deftest is]]))

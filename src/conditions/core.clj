@@ -1,6 +1,7 @@
 (ns conditions.core
   (:require [clojure.walk :as walk]))
 
+
 (def ^:dynamic *handlers*
   "A stack of maps of condition handlers. Being a stack allows handler override including fall-through functionality."
   [{}])
@@ -70,57 +71,6 @@
   ([condition arg normally]
    (condition* *handlers* condition arg normally)))
 
-(defn restart
-  "When a condition sends handlers as its payload rather than simple data, then
-  the handlers can respond by choosing which one to respond to in the context,
-  we get something very similar to CL's restart system.
-
-  In that scenario, use the restart helper, which enables them to be expressed clearly.
-
-  Usage:
-
-  (manage [:on-div-zero (restart :use-value 1)]
-    (determine-infinity))"
-  ([condition]
-   (restart condition nil nil))
-  ([condition arg]
-   (restart condition arg nil))
-  ([condition arg normally]
-   (fn [restarts]
-     (assert (instance? Restarts restarts)
-             "When using restart, the signalling condition must provide the handlers to restart.")
-     (condition* (:handlers restarts) condition arg normally))))
-
-(defn restart-any
-  [& first-restart]
-  ^:custom
-  (fn [handlers depth condition normally]
-    (fn [restarts]
-      (assert (instance? Restarts restarts)
-              "When using restart, the signalling condition must provide the handlers to restart.")
-      (let [available (set (keys (apply merge (:handlers restarts))))
-            found (some available first-restart)]
-        (if found
-          (condition* (:handlers restarts) found nil nil)
-          (condition* (with-meta handlers {:depth (dec depth)}) depth condition normally))))))
-
-(defn restart-with
-  "Calls `(f condition arg default-action)`. Return a vector with
-  `[restart-condition restart-data default-action]` which is used to run the
-  restart.
-
-  `restart-data` and `default-action` are optional."
-  ([f]
-   ^:custom
-   (fn [handlers depth condition normally]
-     (fn [restarts]
-       (assert (instance? Restarts restarts)
-               "When using restart, the signalling condition must provide the handlers to restart.")
-       (let [r (f condition (:data restarts) normally)]
-         (cond (:custom (meta r)) (condition* (:handlers restarts) nil nil r)
-               (sequential? r) (apply condition* (:handlers restarts) r)
-               :else (condition* (:handlers restarts) r)))))))
-
 (defn make-handler
   "Apply just the right number of wrapper functions."
   [x]
@@ -141,8 +91,8 @@
 
   Example:
 
-    (manage [:xyz (handler-cond #(= :x (foo %)) :i-like-x
-                                #(= :z (foo %)) (error \"Oh no, it's Z!\"))] ...)"
+      (manage [:xyz (handler-cond #(= :x (foo %)) :i-like-x
+                                  #(= :z (foo %)) (error \"Oh no, it's Z!\"))] ...)"
   [& cond-restart-pairs]
   (let [arg (gensym "arg")
         handlers (gensym "handlers")
@@ -235,8 +185,8 @@
     the ex-data of the exception used to unwind the stack upon retry or result.
     The ex-data is one of:
 
-       {ident :retry :args [arg1 arg2]}
-       {ident :result :result result}
+         {ident :retry :args [arg1 arg2]}
+         {ident :result :result result}
 
   - `handlers` The parent handlers, usually *handlers*
   - `handler-binding` a symbol that will be the new handlers within the block.
@@ -260,7 +210,7 @@
                               :result (:result data#)
                               (throw e#))))))]
          (if (instance? Retry result#)
-           (let [~result-args (.args result#)]
+           (let [~result-args (:args result#)]
              (recur ~@(map-indexed (fn [i _] `(nth ~result-args ~i)) args)))
            result#)))))
 
@@ -329,11 +279,11 @@
 
   Example:
 
-    (manage [:file-not-found alternate-filename] ;; try using the other filename
-      (open-file my-file))
+      (manage [:file-not-found alternate-filename] ;; try using the other filename
+        (open-file my-file))
 
-    (manage [:file-not-found #(str % \".txt\")] ;; try adding .txt to the file name
-      (open-file my-file))
+      (manage [:file-not-found #(str % \".txt\")] ;; try adding .txt to the file name
+        (open-file my-file))
 
   Handler names can be any value.
 
@@ -373,19 +323,19 @@
 
   Examples:
 
-    ;; This will work correctly
-    (lazy-conditions
-      (map #(condition :oops %) (range 100)))
+        ;; This will work correctly
+        (lazy-conditions
+          (map #(condition :oops %) (range 100)))
 
-    ;; This will also work correctly
-    (let [f (lazy-conditions #(condition :oops %))]
-      (map f (range 100)))
+        ;; This will also work correctly
+        (let [f (lazy-conditions #(condition :oops %))]
+          (map f (range 100)))
 
-    ;; This may NOT work, depending on when the lazy sequence returned by map is realized:
-    (map #(condition :oops %) (range 100))
+        ;; This may NOT work, depending on when the lazy sequence returned by map is realized:
+        (map #(condition :oops %) (range 100))
 
-    ;; This does NOTHING useful, since the capture itself may be executed outside of the expected scope.
-    (map #(lazy-conditions (condition :oops %))] (range 100))"
+        ;; This does NOTHING useful, since the capture itself may be executed outside of the expected scope.
+        (map #(lazy-conditions (condition :oops %))] (range 100))"
   [& forms]
   (let [handlers (gensym "handlers")]
     ;; FIXME: this doesn't work if the condition or manage calls are not visible
