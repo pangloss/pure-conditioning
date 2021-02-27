@@ -215,7 +215,7 @@ The final missing piece is the ability to respond to an error by unwinding the s
 In this example, if `do-something` raises the condition `:x`, the result will be `"nevermind"` regardless of the logic nested within the do-something function, exactly as if that string were returned by a `catch` block.
 
 ```clojure
-(manage [:x (fn [_] (result! "nevermind"))]
+(manage [:x (result! "nevermind")]
   (do-something 3))
 ```
 
