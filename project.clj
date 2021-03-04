@@ -1,4 +1,4 @@
-(defproject com.xn--lgc/pure-conditioning "0.1.2-SNAPSHOT"
+(defproject com.xn--lgc/pure-conditioning "0.2.0-SNAPSHOT"
   :description "A simple, fast, purely functional condition / restart system for Clojure"
   :url "https://www.xn--lgc.com/pure-conditioning"
   :license {:name "MIT"
