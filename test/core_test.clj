@@ -1,8 +1,8 @@
 (ns core-test
   (:require  [clojure.test :as t]
-             [conditions :refer [manage condition lazy-conditions handler-cond restart restarts
-                                 retryable retryable-fn* retry! result! condition*
-                                 remap required sibling fall-through error exception default handle trace]]))
+             [pure-conditioning :refer [manage condition lazy-conditions handler-cond restart restarts
+                                        retryable retryable-fn* retry! result! condition*
+                                        remap required sibling fall-through error exception default handle trace]]))
 
 (t/deftest various-handler-types
   (let [results

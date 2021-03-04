@@ -1,4 +1,4 @@
-(ns conditions.core
+(ns pure-conditioning.core
   (:require [clojure.walk :as walk]))
 
 

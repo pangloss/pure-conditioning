@@ -1,6 +1,6 @@
 (ns cl-example-test
   (:require [clojure.test :as t]
-            [conditions :refer [restart-with manage condition condition* restart restarts lazy-conditions error]]))
+            [pure-conditioning :refer [restart-with manage condition condition* restart restarts lazy-conditions error]]))
 
 ;; from https://wiki.c2.com/?CommonLispConditionSystem
 

@@ -1,6 +1,6 @@
-(ns conditions.handlers
-  (:require [conditions.core :refer [condition* restarts**]])
-  (:import conditions.core.Restarts))
+(ns pure-conditioning.handlers
+  (:require [pure-conditioning.core :refer [condition* restarts**]])
+  (:import pure_conditioning.core.Restarts))
 
 (defn custom
   "Mark a function as a custom handler.

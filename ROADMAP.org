@@ -1,14 +1,14 @@
 * Roadmap
-- Implement below ideas and incorporate them if they work
-- Switch to cljc for ClojureScript, etc.
-
-** Ideas
-
+*** DONE migrate top level namespace which I forgot to change when I renamed the project.
+*** Switch to cljc for ClojureScript, etc.
 *** (optionally?) allow hierarchical matching of conditions in handlers.
 - use def-map-type to create a map that (at least apparently) uses `isa?` to
   match keys instead of simple equality so that I can use derive to get
   inheritance-like semantics for matching conditions
 - Don't assume the global hierarchy, but make it the default.
+*** Use pre-allocated exceptions for result! and retry!
+- core.match does this. The claim is that you get very good performance from
+  exceptions used this way. The structure should be amenable to the technique.
 
 ** Resolve Questions
 - What happens if I call ~retry!~ in a function that has already returned the head

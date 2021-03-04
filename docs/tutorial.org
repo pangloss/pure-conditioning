@@ -19,7 +19,7 @@ pure-conditioning library.
 
 #+begin_src clojure :tangle no :noweb-ref tutorial
   (ns tutorial
-    (:require [conditions :refer :all]
+    (:require [pure-conditioning :refer :all]
               [clojure.java.io :refer [reader]]
               [clojure.string :as str]
               [clojure.test :refer [deftest is]]))
@@ -195,7 +195,7 @@ see? Our two restart handlers are visible in the exception: ~:continue-next-fiel
      :handlers
      [{}
       {:continue-next-row #function[clojure.lang.AFunction/1]}
-      {#function[clojure.core/any?] #function[conditions.handlers/fall-through/fn--15590]}
+      {#function[clojure.core/any?] #function[pure-conditioning.handlers/fall-through/fn--15590]}
       {:continue-next-field #function[clojure.lang.AFunction/1]}],
      :condition :url-invalid,
      :message "URL invalid"}}
