@@ -3,3 +3,4 @@
 /target
 /docs/tutorial/
 pom.xml*
+.lein-failures
