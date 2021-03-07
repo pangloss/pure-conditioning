@@ -192,7 +192,18 @@
   - `handler-binding` a symbol that will be the new handlers within the block.
   - `args` the function args and also the args that must be provided when calling `retry!`
   - `condition-handlers` the handlers used in the manage block within this function'
-  - `forms` the body within the manage block. "
+  - `forms` the body within the manage block.
+
+  If you retry, the managed code block will be re-run. That is done using
+  `recur` so if you produce an infinite loop of retries, you will not be rescued
+  by a stack overflow!
+
+  This example abuses retryable-fn* to treat -retry! like a baroque recur:
+
+       ((retryable-fn* :this-retry-ident *handlers* [handlers i] [10 (result! \"ten!\")]
+         (-retry! :this-retry-ident (condition* handlers i i (constantly inc))))
+        0)
+       ;; => \"ten!\""
   {:style/indent 4 :see-also ["retryable" "manage*" "manage"]}
   [ident handlers [handler-binding & args] condition-handlers & forms]
   (let [ident (or ident (gensym))
@@ -221,7 +232,11 @@
 
   - `condition-handlers` the handlers used in the manage block within this function'
   - `args` the function args and also the args that must be provided when calling `retry!`
-  - `forms` the body within the manage block. "
+  - `forms` the body within the manage block.
+
+  If you retry, the managed code block will be re-run. That is done using
+  `recur` so if you produce an infinite loop of retries, you will not be rescued
+  by a stack overflow!"
   {:style/indent 2 :see-also ["retryable-fn*" "manage"]}
   [[& args] condition-handlers & forms]
   `((retryable-fn* nil *handlers* [handlers# ~@args] ~condition-handlers
@@ -229,16 +244,35 @@
                      ~@forms))
     ~@args))
 
-(defn result! [result]
+(defn result!
+  "Within a `manage`, `retryable` or `retryable-fn*` block, this will cause the
+  block to short circuit and return the provided value. Behaviour is much
+  like `return` in javascript since it only breaks you out of the given block.
+
+  It may only be used as or within a condition handler."
+  [result]
   (throw (ex-info "result! must be used within manage, retryable or retryable-fn* blocks." {::special-handler :result :result result})))
 
-(defn retry! [& args]
+(defn retry!
+  "Within a `retryable` or `retryable-fn*` block, this will cause the
+  block to short circuit and try again from the beginning.
+
+  It may only be used as or within a condition handler."
+  [& args]
   (throw (ex-info "retry! must be used within retryable or retryable-fn* blocks." {::special-handler :retry :args args})))
 
-(defn -result! [ident result]
+(defn -result!
+  "`result!` is transformed into this, or if you call `retryable-fn*` directly
+  with a provided ident value, you can abuse this anywhere in the body of the
+  condition handler, too."
+  [ident result]
   (throw (ex-info "-result! must be used within manage, retryable or retryable-fn* blocks." {ident :result ::special-handler :result :result result})))
 
-(defn -retry! [ident & args]
+(defn -retry!
+  "`retry!` is transformed into this, or if you call `retryable-fn*` directly
+  with a provided ident value, you can abuse this anywhere in the body of the
+  condition handler, too."
+  [ident & args]
   (throw (ex-info "-retry! must be used within retryable or retryable-fn* blocks." {ident :retry ::special-handler :retry :args args})))
 
 (defn- result? [condition-handlers]
