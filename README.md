@@ -16,9 +16,9 @@
 
 [Pure Conditioning](https://github.com/pangloss/pure-conditioning) is a purely functional, fast, and cleanly decomplected condition / restart system in Clojure. It does not use exceptions and needs no global state at all.
 
-This project has been stable and in use for me without issue for nearly 18 months now. I still consider it alpha stage until I dedicate some time to revisiting its design in the coming months. At that time I may or may not introduce breaking changes. After that, if I'm still happy with the design I will bump it to 1.0.0 and try to keep it stable.
-
 While global state is not required, it makes things more convenient so stateful variants of all pure functions that make use of a dynamicly bound var are available.
+
+This project has been stable and in use for me without issue for nearly 18 months now. I still consider it alpha stage until I dedicate some time to revisiting its design in the coming months. At that time I may or may not introduce breaking changes. After that, if I'm still happy with the design I will bump it to 1.0.0 and try to keep it stable.
 
 ## Background
 
@@ -39,7 +39,7 @@ This library lets you do that.
 Let's get started.
 
 ``` clojure
-(require '[conditioning :refer [manage condition default]])
+(require '[pure-conditioning :refer [manage condition default]])
 ```
 
 In this first example we're doing nothing useful but we can see how the core pieces fit together. In the manage block, we define two handlers, one that will increment odd values, and another that just returns the constant `:even`. We realize the lazy sequence with `vec`, but later will see how to capture the handler scope to make lazy sequences safe for condition handling.
@@ -98,7 +98,9 @@ trace           ;; prints out the condition and value, then returns the value.
 (error message)
 (error message ex-data) ;; will raise an ex-info exception.
 
-(exception ExceptionClass message) ;; and `(exception ExceptionClass message cause)` will raise an instance of the given exception class.
+;; Raise an instance of the given exception class:
+(exception ExceptionClass message) 
+(exception ExceptionClass message cause) ;; with optional cause exception
 ```
 
 > ### No unnecessary exceptions
@@ -143,8 +145,8 @@ Here's a silly example of a bunch of these handlers working together. Creating t
 
 ``` clojure
 ;; This one requires way more than normal
-(require '[conditioning :refer [manage condition remap sibling 
-                                fall-through error exception required]])
+(require '[pure-conditioning :refer [manage condition remap sibling 
+                                     fall-through error exception required]])
 ```
 
 ``` clojure
@@ -170,7 +172,7 @@ It's like they enable the called method to ask the caller a question which the c
 
 ``` clojure
 ;; Require a couple more functions
-(require '[conditioning :refer [manage condition restart restarts restart-with]])
+(require '[pure-conditioning :refer [manage condition restart restarts restart-with]])
 ```
 
 ``` clojure
