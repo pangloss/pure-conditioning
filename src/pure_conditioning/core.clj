@@ -153,7 +153,30 @@
               data pairs))
 
 (defn restarts
-  "Build a set of ways that the condition handler can resume execution."
+  "Build a set of ways that the condition handler can resume execution.
+
+      (condition :what-happened
+         (restarts {:some :info}
+            :do-this (fn [data-from-restart] ...)
+            :do-that (fn [_] :that))
+         (default (restart :do-that)))
+
+  Note the optional default restart used in the example.
+
+  Every restart function takes one argument.
+
+  A restart can optionally provide a fallback if its preferred case isn't
+  handled:
+
+      (restart :do-other info (default (restart :do-this)))
+
+  [[restarts]] is a function, so it may be convenient to
+
+      (apply restarts data
+        :do-this #(this %)
+        other-handlers)
+
+  See also [[add-default-restart!]] [[pure-conditioning.handlers/restart]]"
   {:style/indent :defn}
   [data & pairs]
   (restarts* *handlers* data pairs))
