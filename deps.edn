@@ -6,4 +6,10 @@
    :extra-deps {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
    :main-opts   ["-m" "cognitect.test-runner"]
    :exec-fn cognitect.test-runner.api/test
-   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"]}}}
+   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"]}
+
+  :build
+  ;; build.clj tool.
+  {:deps {io.github.clojure/tools.build {:git/tag "v0.10.3" :git/sha "15ead66"}
+          slipset/deps-deploy {:mvn/version "0.2.0"}}
+   :ns-default build}}}
